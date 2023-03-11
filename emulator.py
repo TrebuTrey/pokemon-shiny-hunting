@@ -20,6 +20,33 @@ class ToggleState(str, Enum):
     ON = 'on'
     OFF = 'off'
 
+class PauseState(Enum):
+    """Enumeration of Menu State in overworld"""
+    POKEDEX = 0
+    POKEMON = 1
+    PACK = 2
+    POKEGEAR = 3
+    TRAINER_ID = 4
+    SAVE = 5
+    OPTION = 6
+    EXIT = 7
+
+class PartyState(Enum):
+    """Enumeration of party state in menu"""
+    SLOT_1 = 0
+    SLOT_2 = 1
+    SLOT_3 = 2
+    SLOT_4 = 3
+    SLOT_5 = 4
+    SLOT_6 = 5
+
+class PackState(Enum):
+    """Enumeration of pack state in overworld and battle"""
+    ITEMS = 0
+    BALLS = 1
+    KEY_ITEMS = 2
+    TM_HM = 3
+
 class Emulator():
     """Take actions inside an emulator."""
     def __init__(self):
@@ -149,7 +176,7 @@ class Emulator():
     def move_down(self, presses: int = 1, delay_after_press: float = None):
         """Move DOWN using the d-pad."""
         self.cont.move_down(presses, delay_after_press)
-    
+
     @interact
     def move_left_precise(self, presses: int = 1, delay_after_press: float = None):
         """Move LEFT using the d-pad with precision (guarantees exact number of presses)."""
@@ -168,6 +195,39 @@ class Emulator():
         """Move RIGHT using the d-pad."""
         self.cont.move_right(presses, delay_after_press)
     
+    def navigate_menu(self, menu_item: PauseState):
+        """Navigate through the overworld's pause menu. Select the menu item to pull up"""
+        if not self.state.is_pause_menu_open():
+            self.press_start()
+            self.state.pause_menu_on()
+        presses = self.state.update_pause_menu_state(menu_item)
+        if presses >= 0:
+            self.move_up_precise(presses= presses, delay_after_press=0.25)
+        else:
+            self.move_down_precise(presses= abs(presses), delay_after_press=0.25)
+
+    def navigate_pack(self, menu_item: PackState):
+        if not self.state.is_pack_menu_open():
+            self.navigate_menu(PauseState.PACK)
+            self.press_a(delay_after_press=0.25)
+            self.state.pack_menu_on()
+        presses = self.state.update_pack_state(menu_item)
+        if presses >= 0:
+            self.move_left_precise(presses= presses, delay_after_press=0.25)
+        else:
+            self.move_right_precise(presses= abs(presses), delay_after_press=0.25)
+    
+    def navigate_party(self, menu_item: PartyState):
+        if not self.state.is_party_menu_open():
+            self.navigate_menu(PauseState.POKEMON)
+            self.press_a(delay_after_press=0.25)
+            self.state.party_menu_on()
+        presses = self.state.update_party_state(menu_item)
+        if presses >= 0:
+            self.move_up_precise(presses= presses, delay_after_press=0.25)
+        else:
+            self.move_down_precise(presses= abs(presses), delay_after_press=0.25)
+
     def reset(self, delay_after_press: float = None):
         """Reset the emulator."""
         self.cont.press_reset_btn(delay_after_press)
@@ -224,6 +284,12 @@ class EmulatorState():
         self.pause = ToggleState.OFF
         self.run = ToggleState.OFF
         self.battle = ToggleState.OFF
+        self.pause_menu = PauseState.POKEDEX
+        self.pause_menu_open = ToggleState.OFF
+        self.party_menu = PartyState.SLOT_1
+        self.party_menu_open = ToggleState.OFF
+        self.pack_menu = PackState.ITEMS
+        self.pack_menu_open = ToggleState.OFF
         self.game = POKEMON_GAME
     
     def is_fast_fwd_on(self) -> bool:
@@ -244,6 +310,24 @@ class EmulatorState():
     def is_game_off(self) -> bool:
         return self.run == ToggleState.OFF
 
+    def is_pack_menu_open(self) -> bool:
+        return self.pack_menu_open == ToggleState.ON
+
+    def is_pack_menu_closed(self) -> bool:
+        return self.pack_menu_open == ToggleState.OFF
+
+    def is_party_menu_open(self) -> bool:
+        return self.party_menu_open == ToggleState.ON
+
+    def is_party_menu_closed(self) -> bool:
+        return self.party_menu_open == ToggleState.OFF
+    
+    def is_pause_menu_open(self) -> bool:
+        return self.pause_menu_open == ToggleState.ON
+
+    def is_pause_menu_closed(self) -> bool:
+        return self.pause_menu_open == ToggleState.OFF
+
     def fast_fwd_on(self):
         self.fast_fwd = ToggleState.ON
     
@@ -262,6 +346,24 @@ class EmulatorState():
     def game_off(self):
         self.run = ToggleState.OFF
     
+    def pack_menu_on(self):
+        self.pack_menu_open = ToggleState.ON
+
+    def pack_menu_off(self):
+        self.pack_menu_open = ToggleState.OFF
+
+    def party_menu_on(self):
+        self.party_menu_open = ToggleState.ON
+
+    def party_menu_off(self):
+        self.party_menu_open = ToggleState.OFF
+
+    def pause_menu_on(self):
+        self.pause_menu_open = ToggleState.ON
+
+    def pause_menu_off(self):
+        self.pause_menu_open = ToggleState.OFF
+
     def battle_state(self) -> ToggleState:
         if is_in_battle():
             self.battle = ToggleState.ON
@@ -271,6 +373,30 @@ class EmulatorState():
             logger.info("BattleState is OFF")
         return self.battle
 
+    def update_pack_state(self, menu_item: PackState) -> int:
+            presses = int(self.pack_menu.value) - int(menu_item.value)
+            self.pack_menu = menu_item
+            return presses
+
+    def update_party_state(self, menu_item: PartyState) -> int:
+        presses = int(self.party_menu.value) - int(menu_item.value)
+        self.party_menu = menu_item
+        return presses
+
+    def update_pause_menu_state(self, menu_item: PauseState) -> int:
+        presses = int(self.pause_menu.value) - int(menu_item.value)
+        self.pause_menu = menu_item
+        return presses
+    
+    def state_reset(self):
+        self.battle = ToggleState.OFF
+        self.pause_menu = PauseState.POKEDEX
+        self.pause_menu_off()
+        self.party_menu = PartyState.SLOT_1
+        self.party_menu_off()
+        self.pack_menu = PackState.ITEMS
+        self.pack_menu_off()
+    
 if __name__ == "__main__":
     em = Emulator()
     em.launch_game()

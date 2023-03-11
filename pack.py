@@ -5,7 +5,7 @@ import logging
 import os
 from typing import List, Tuple
 
-from emulator import Emulator
+from emulator import Emulator, PauseState
 from image import (
     determine_pack_items,
     get_latest_screenshot_fn
@@ -160,9 +160,8 @@ def collect_pack_inventory(emulator: Emulator) -> Tuple[Items, Machines, KeyItem
     """Collect inventory of all items in the pack."""
     # assume user is in the Pokémon world
     # assume pause menu has not yet been interacted
-    emulator.press_start(delay_after_press=0.25)
-    emulator.move_down_precise(presses=2)
-    emulator.press_a(delay_after_press=0.25)
+    emulator.navigate_menu(PauseState.PACK)
+    emulator.press_a()
     
     # get inventory of each section in the pack
     items_list = collect_inventory(emulator, get_qty=True)
