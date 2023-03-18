@@ -14,6 +14,7 @@ from image import (
     determine_name,
     determine_pack_items,
     determine_sprite_type,
+    determine_party_count
 )
 from pokemon import Pokemon, SpriteType
 from helpers import test_util
@@ -154,6 +155,12 @@ def test_9_determine_pack_items():
             assert(det_item_qty == known_item_qty)
     logger.info("Test 9 - success!")
 
+def test_10_determine_party_count():
+    logger.info("Test 10 - Determine Party Count")
+    for i in range(6):
+        img = os.path.join(TEST_IMG_DIR, f"Pokemon_Slot_{i + 1}.png")
+        num = determine_party_count(img, True)
+        logger.info(f"# of Pokemon in Party: {num}")
 
 @click.command()
 @click.option("-n", "--test-number", required=False, type=int,

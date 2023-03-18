@@ -417,6 +417,43 @@ def crop_item_qty(im_item_qty: Image.Image, del_png: bool = True) -> List[cv2.Ma
 
     return num_imgs
 
+def determine_badge_status(img: str, del_png: bool = True) -> list:
+    """Determine which gym leaders Trainer has defeated in playthrough"""
+    im = Image.open(img)
+
+    gym_leaders_count = 0
+    rows = 2
+    cols = 4
+    leader_imgs = list()
+    for i in range(rows):
+        for j in range(cols):
+            badge_width = im.width * 0.045
+            badge_height = badge_width
+            badge_space = 3.45 * badge_width
+
+            left = j * (badge_width + badge_space) + im.width * (0.105)
+            right = left + badge_width
+            top = im.height * .667 + i * 3.5 * badge_height
+            bottom = top + badge_height
+
+            im_badge = im.crop((left, top, right, bottom))
+            gym_leaders_count += 1
+
+            cropped_fn = f"badge_{str(gym_leaders_count)}.png"
+            im_badge.save(cropped_fn)
+
+            im_badge = cv2.imread(cropped_fn)
+            if not is_img_white(im_badge):
+                leader_imgs.append(gym_leaders_count)
+            
+            os.remove(cropped_fn)
+
+
+    if del_png:
+        os.remove(img)
+
+    return leader_imgs
+
 def determine_capture_status(img: str, del_png: bool = True) -> bool:
     """Determine if capture has been made successfully"""
     pokename = crop_name_in_battle(img)
@@ -467,6 +504,93 @@ def determine_capture_status(img: str, del_png: bool = True) -> bool:
         os.remove(img)
     return boolean
 
+def determine_hm_taught(img: str, del_png: bool = True) -> list:
+    """Determine what HMs given Pokemon has been taught"""
+    im = Image.open(img)
+    
+    # generation II games have maximum 12 chars for items
+    max_moves = 4
+    max_chars = 9
+    menu_pokemon = list()
+    for j in range(max_moves):
+        letter_imgs = list()
+        move_up = im.height * (0.1105)
+        for i in range(max_chars):
+            # percentages used in calcs were determined empirically
+            # valid only for generation II games
+            char_width = im.width*(0.045)
+            char_height = im.height * (0.05)
+            char_space = char_width*(0.105)
+            
+            left = im.width*(0.4) + i*(char_width + char_space)
+            right = left + char_width
+            top = im.height * (0.33) - j*(move_up)
+            bottom = top + char_height
+
+            # crop image and save to disk
+            im_char = im.crop((left, top, right, bottom))
+            cropped_fn = f"item_char_{str(i)}.png"
+            im_char.save(cropped_fn)
+
+            # load into OpenCV obj
+            im1 = cv2.imread(cropped_fn)
+
+            # determine if img contains a letter based on how white it is
+            if not is_img_white(im1):
+                letter_imgs.append(im1)
+            else:
+                break
+        if determine_name(letter_imgs) == '':
+            continue
+        else:
+            menu_pokemon.append(determine_name(letter_imgs))
+    return menu_pokemon
+
+def determine_party_count(img: str, del_png: bool = True) -> int:
+    """Determine the number of pokemon currently in the Trainer's party"""
+    im = Image.open(img)
+    party_count_max = 6
+    """Check for location of cancel"""
+    for j in range(party_count_max):
+        cancel_top = (j * im.height*0.11)+ (im.height * 0.15)
+        cancel_bot = cancel_top + im.height * 0.075
+        cancel_left = im.width * 0.05
+        cancel_right = im.width * 0.35
+
+        cancel_box = im.crop((cancel_left, cancel_top, cancel_right, cancel_bot))
+
+        cancel_str = 6
+        letter_imgs = list()
+        for i in range(cancel_str):
+            left = i * cancel_box.width * (1/6)
+            right = left + cancel_box.width * 0.15
+            top = cancel_box.height * 0.15
+            bottom = cancel_box.height * 0.9
+
+            char = cancel_box.crop((left, top, right, bottom))
+            cropped_fn = f"char_{i}.png"
+            char.save(cropped_fn)
+            remove_white(cropped_fn)
+            char = cv2.imread(cropped_fn)
+            
+            try:
+                if not is_img_white(char):
+                    letter_imgs.append(char)
+                if determine_name(letter_imgs) == 'cancel':
+                    party_count = j + 1 
+                    break
+            except:
+                letter_imgs.append("")
+                break
+
+            if del_png:
+                os.remove(cropped_fn)
+
+    try:
+        return party_count
+    except:
+        return logger.info("Party count could not be obtained")
+
 def is_in_battle(del_png: bool = True) -> bool:
     """Check to see if Trainer is in battle"""
     img = get_latest_screenshot_fn()
@@ -505,6 +629,56 @@ def is_in_battle(del_png: bool = True) -> bool:
     else:
         return False
 
+def remove_white(img: str):
+    """Removes White from the exterior of the letter"""
+    im = Image.open(img)
+    x, y = im.size
+    left = 0
+    right = x
+    top = 0
+    bottom = y
+    for i in range(x):
+        col = 0
+        for j in range(y):
+            coordinate = i, j
+            _get = im.getpixel(coordinate)
+            if _get >= (245, 245, 245):
+                col += 1
+        
+        if col == y and i < im.width * 0.5:
+            left = i + 1
+        elif col == y and i >= im.width * 0.5:
+            right = i
+            break
+    try:
+        im = im.crop((left, top, right, bottom))
+        im.save(img)
+    except:
+        return 0
+    x, y = im.size
+    for i in range(y):
+        row = 0
+        for j in range(x):
+            coordinate = j, i
+            _get = im.getpixel(coordinate)
+            if _get >= (245, 245, 245):
+                row += 1
+        
+        if row == x and i < im.height * 0.5:
+            top = i + 1
+        elif row == x and i >= im.height * 0.5:
+            bottom = i
+            break
+
+    try:
+        im = im.crop((left, top, right, bottom))
+        im.save(img)
+    except:
+        return 0
+        
+
+
 if __name__ == "__main__":
-    img = get_latest_screenshot_fn()
-    im = determine_capture_status(img, False)
+    
+    im = remove_white("char_0.png")
+    
